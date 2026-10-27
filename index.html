@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Timeline Race</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: one mobile-first column for players; #host widens to QR pane + live leaderboard */
+:root{
+  --bg:#F5F7FB; --surface:#FDFEFF; --line:#D9DEE8; --ink:#1E2240; --muted:#5A6178;
+  --heading:#201060; --accent:#1466C7; --cyan:#00B0F0; --wash:#D6EEFB;
+  --primary:#201060; --on-primary:#FDFEFF;
+  --ok:#0F7A55; --okbg:#DDF3EA; --bad:#B42318; --badbg:#FDE7E4; --warn:#9A5B00;
+  --font:'Prompt', Tahoma, sans-serif;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#0E0A2B; --surface:#19143F; --line:#2F2A63; --ink:#ECEEFA; --muted:#A8ADCB;
+  --heading:#F1F3FF; --accent:#7FD6F7; --wash:#1F2A5C;
+  --primary:#7FD6F7; --on-primary:#120C38;
+  --ok:#5FD3A5; --okbg:#123A30; --bad:#FF8A7A; --badbg:#3D1A1A; --warn:#FFC266; color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5}
+[hidden]{display:none!important}
+.wrap{max-width:560px;margin:0 auto;padding-block:20px 40px;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));display:flex;flex-direction:column;gap:18px}
+.wrap.wide{max-width:1180px}
+section{display:flex;flex-direction:column;gap:16px}
+.eyebrow{font-size:13px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:0}
+h1{font-size:clamp(34px,8vw,52px);font-weight:800;line-height:1.05;color:var(--heading);margin:0;text-wrap:balance}
+h2{font-size:22px;font-weight:700;color:var(--heading);margin:0}
+p{margin:0}
+.muted{color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px}
+.rules{display:grid;gap:8px;padding:0;margin:0;list-style:none}
+.rules li{display:flex;gap:10px;align-items:flex-start}
+.rules b{color:var(--heading)}
+.hex{flex:none;width:22px;height:24px;background:var(--cyan);clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);display:grid;place-items:center;color:#120C38;font-size:12px;font-weight:700;margin-top:2px}
+.chip{flex:none;background:var(--cyan);color:#120C38;border-radius:4px;padding:0 6px;font-weight:700;font-size:13px;margin-top:2px}
+label{font-weight:600;color:var(--heading)}
+input{font:inherit;font-size:22px;font-weight:600;letter-spacing:.06em;width:100%;padding:12px 14px;border:2px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink)}
+#emp{text-transform:uppercase}
+input:focus{outline:none;border-color:var(--cyan)}
+.btn{font:inherit;font-size:18px;font-weight:700;border:0;border-radius:6px;padding:14px 18px;background:var(--primary);color:var(--on-primary);cursor:pointer;width:100%}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.ghost{background:transparent;color:var(--accent);border:2px solid var(--line)}
+.btn:focus-visible,.tile:focus-visible{outline:3px solid var(--cyan);outline-offset:2px}
+.msg{font-size:15px;min-height:22px}
+.msg.err{color:var(--bad)}
+.field{display:grid;gap:8px}
+.banner{background:var(--badbg);color:var(--bad);border-radius:8px;padding:12px 14px;font-size:15px}
+/* play */
+.bar{position:sticky;top:0;z-index:5;background:var(--bg);padding-block:8px;display:flex;justify-content:space-between;align-items:flex-end;gap:12px;border-bottom:1px solid var(--line)}
+.timer{font-size:40px;font-weight:800;color:var(--heading);font-variant-numeric:tabular-nums;line-height:1}
+.count{font-size:15px;color:var(--muted);text-align:right}
+.count b{font-size:22px;color:var(--heading)}
+.pen{color:var(--bad);font-weight:700;font-size:15px;opacity:0;transition:opacity .2s}
+.pen.show{opacity:1}
+.hint{font-size:14px;color:var(--muted)}
+.board{display:grid;grid-template-columns:96px 1fr;gap:10px}
+.col{display:grid;gap:10px;align-content:start}
+.tile{font:inherit;text-align:left;border:2px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:10px 12px;cursor:pointer;min-height:64px;display:flex;align-items:center;gap:8px;transition:border-color .15s,background .15s}
+.tile.date{justify-content:center;font-size:20px;font-weight:700;color:var(--heading);text-align:center}
+.tile.act{font-size:15px;line-height:1.35}
+.tile.sel{border-color:var(--cyan);background:var(--wash)}
+.tile.done{border-color:var(--ok);background:var(--okbg);cursor:default}
+.tile.done.date{color:var(--ok)}
+.tile .tag{flex:none;font-size:12px;font-weight:700;background:var(--ok);color:var(--surface);border-radius:4px;padding:2px 6px}
+.tile.wrong{border-color:var(--bad);background:var(--badbg);animation:shake .35s}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+@media (prefers-reduced-motion: reduce){.tile.wrong{animation:none}}
+.overlay{position:fixed;inset:0;background:var(--bg);display:grid;place-items:center;z-index:20}
+.big{font-size:140px;font-weight:800;color:var(--heading);font-variant-numeric:tabular-nums}
+/* result */
+.result{text-align:center;display:grid;gap:6px}
+.result .t{font-size:64px;font-weight:800;color:var(--heading);font-variant-numeric:tabular-nums;line-height:1.1}
+.pill{display:inline-block;justify-self:center;padding:6px 14px;border-radius:999px;font-weight:700;font-size:16px}
+.pill.top{background:var(--cyan);color:#120C38}
+.pill.no{background:var(--wash);color:var(--heading)}
+/* leaderboard */
+.lb{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.lb th{text-align:left;font-size:13px;font-weight:600;color:var(--muted);padding:6px 8px;border-bottom:1px solid var(--line)}
+.lb td{padding:8px;border-bottom:1px solid var(--line);font-size:16px}
+.lb td.r{width:48px;font-weight:700;color:var(--heading)}
+.lb tr.me td{background:var(--wash)}
+.lb .medal{display:inline-grid;place-items:center;width:28px;height:30px;background:var(--cyan);color:#120C38;clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);font-size:14px}
+.lb .ms{text-align:right;font-weight:600}
+.lb .flag{color:var(--warn);font-size:13px;font-weight:600}
+.lbwrap{overflow-x:auto}
+.empty{padding:18px 8px;color:var(--muted);text-align:center}
+/* host */
+.host{display:grid;grid-template-columns:minmax(0,380px) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:820px){.host{grid-template-columns:minmax(0,1fr)}}
+.qrbox{background:#FFFFFF;border-radius:10px;padding:16px;display:grid;place-items:center;min-height:240px}
+.qrbox img,.qrbox canvas{max-width:100%;height:auto}
+.url{font-size:13px;word-break:break-all;color:var(--muted);user-select:all}
+.stat{display:flex;gap:12px}
+.stat div{flex:1;background:var(--wash);border-radius:8px;padding:10px 12px}
+.stat b{display:block;font-size:30px;color:var(--heading);line-height:1.1}
+.ctrls{display:grid;gap:10px}
+.state.on{color:var(--ok)} .state.off{color:var(--bad)}
+.lb.host-lb td{font-size:18px}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <p class="banner" id="setupBanner" hidden>ยังไม่ได้ตั้งค่า API_URL · เกมจะเล่นได้แบบฝึกซ้อมเท่านั้น และไม่บันทึกผล</p>
+
+  <!-- JOIN -->
+  <section id="v-join">
+    <p class="eyebrow">T&amp;OD · 2026 Year-End Review</p>
+    <h1>Timeline Race</h1>
+    <p class="muted">จับคู่วันที่กับกิจกรรมของรอบประเมินให้ครบ 7 คู่ ให้เร็วที่สุด</p>
+    <div class="card">
+      <ul class="rules">
+        <li><span class="hex">1</span><span>แตะ <b>วันที่</b> แล้วแตะ <b>กิจกรรม</b> ที่ตรงกัน (แตะกิจกรรมก่อนก็ได้)</span></li>
+        <li><span class="hex">2</span><span>จับคู่ผิด <b>บวกเวลา 5 วินาที</b></span></li>
+        <li><span class="hex">3</span><span>ครบ 7 คู่ หยุดเวลาอัตโนมัติ · <b>30 คนที่เร็วที่สุด</b> ติดอันดับ</span></li>
+        <li><span class="hex">4</span><span>เล่นได้ <b>1 ครั้ง</b> ต่อรหัสพนักงาน กดเริ่มแล้วออกกลางคันจะเล่นใหม่ไม่ได้</span></li>
+      </ul>
+    </div>
+    <form id="joinForm" class="field" novalidate>
+      <label for="emp">รหัสพนักงาน</label>
+      <input id="emp" name="emp" autocomplete="off" maxlength="15" placeholder="เช่น 100731">
+      <p id="joinMsg" class="msg" role="status"></p>
+      <button class="btn" id="startBtn" type="submit">เริ่มเกม</button>
+    </form>
+    <button class="btn ghost" id="seeLb" type="button">ดูอันดับ Top 30</button>
+  </section>
+
+  <!-- PLAY -->
+  <section id="v-play" hidden style="gap:12px">
+    <div class="bar">
+      <div><div class="timer" id="timer">0.00</div><div class="pen" id="pen">+5 วินาที</div></div>
+      <div class="count">จับคู่แล้ว<br><b id="cnt">0</b> / 7</div>
+    </div>
+    <p class="hint">แตะวันที่ แล้วแตะกิจกรรมที่ตรงกัน</p>
+    <div class="board">
+      <div class="col" id="dates"></div>
+      <div class="col" id="acts"></div>
+    </div>
+  </section>
+
+  <!-- RESULT -->
+  <section id="v-done" hidden>
+    <div class="card result">
+      <p class="eyebrow">เวลาของคุณ</p>
+      <p class="t" id="rTime">0.00</p>
+      <p class="muted" id="rDetail"></p>
+      <p class="pill no" id="rRank">กำลังบันทึกผล…</p>
+      <p class="msg" id="rMsg" role="status"></p>
+    </div>
+    <div class="card"><h2>Top 30</h2><div class="lbwrap"><table class="lb" id="lbDone"></table></div></div>
+    <div class="card"><h2>เฉลย</h2><ul class="rules" id="answers" style="margin-top:10px"></ul></div>
+  </section>
+
+  <!-- LEADERBOARD -->
+  <section id="v-lb" hidden>
+    <p class="eyebrow">Timeline Race</p>
+    <h1>Top 30</h1>
+    <div class="card"><div class="lbwrap"><table class="lb" id="lbOnly"></table></div></div>
+    <button class="btn ghost" id="backJoin" type="button">กลับไปหน้าเริ่มเกม</button>
+  </section>
+
+  <!-- HOST -->
+  <section id="v-host" hidden>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <p class="eyebrow">T&amp;OD · 2026 Year-End Review · หน้าจอผู้ดำเนินกิจกรรม</p>
+      <h1>Timeline Race</h1>
+    </div>
+    <div class="host">
+      <div style="display:grid;gap:14px">
+        <div class="card" style="display:grid;gap:12px">
+          <h2>สแกนเพื่อร่วมเล่น</h2>
+          <div class="qrbox" id="qr"></div>
+          <p class="url" id="gameUrl"></p>
+        </div>
+        <div class="stat">
+          <div><span class="muted">ส่งผลแล้ว</span><b id="hCount">0</b></div>
+          <div><span class="muted">สถานะ</span><b class="state on" id="hState" style="font-size:22px">เปิดรับ</b></div>
+        </div>
+        <div class="card ctrls">
+          <h2>สำหรับ Admin</h2>
+          <form id="keyForm" class="field" novalidate>
+            <label for="adminKey">รหัส Admin</label>
+            <input id="adminKey" type="password" autocomplete="off">
+            <button class="btn ghost" type="submit">เข้าสู่ระบบ Admin</button>
+          </form>
+          <div id="adminCtrls" class="ctrls" hidden>
+            <button class="btn" id="toggleOpen" type="button">ปิดรับผล</button>
+            <button class="btn ghost" id="exportBtn" type="button">ดาวน์โหลดผลทั้งหมด (CSV)</button>
+            <button class="btn ghost" id="newRound" type="button">เริ่มรอบใหม่ (ล้างอันดับบนจอ)</button>
+            <div id="confirmRow" hidden style="display:grid;gap:8px">
+              <p class="msg err">ยืนยันเริ่มรอบใหม่? ผลรอบเดิมยังอยู่ใน Google Sheet</p>
+              <div style="display:flex;gap:8px"><button class="btn" id="yesRound" type="button">ยืนยัน</button><button class="btn ghost" id="noRound" type="button">ยกเลิก</button></div>
+            </div>
+          </div>
+          <p class="msg" id="hMsg" role="status"></p>
+        </div>
+      </div>
+      <div class="card"><h2>Top 30 · อัปเดตทุก 3 วินาที</h2><div class="lbwrap"><table class="lb host-lb" id="lbHost"></table></div></div>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+(function(){
+"use strict";
+/* ===== ตั้งค่า ===== */
+const API_URL = "https://script.google.com/macros/s/AKfycbzfzltqr4bUwVOZLF4hAym8iqHVt6O4m11yPMdNxj6_LsJC028Fz7gXrBmWEeU5Ufo/exec";
+/* =================== */
+const CONFIGURED = /^https:\/\/script\.google\.com\//.test(API_URL);
+const PENALTY = 5000;
+const PAIRS = [
+  {k:"a", date:"1 พ.ย.",  act:"พนักงานได้รับ task Self Evaluation ใน Workday"},
+  {k:"b", date:"10 พ.ย.", act:"ตั้ง Goal และทำ Mid-Year ให้เสร็จ (กรณียังไม่ได้ทำ)"},
+  {k:"c", date:"15 พ.ย.", act:"พนักงานส่งแบบประเมินตนเอง วันสุดท้าย"},
+  {k:"d", date:"18 พ.ย.", act:"หัวหน้างานเลือกผู้ประเมินเพิ่มเติม (ถ้าต้องการ)"},
+  {k:"e", date:"25 พ.ย.", act:"ผู้ประเมินเพิ่มเติมให้ feedback"},
+  {k:"f", date:"30 พ.ย.", act:"หัวหน้างานประเมินผลลูกทีมให้เสร็จ"},
+  {k:"g", date:"7 ธ.ค.",  act:"เริ่ม Calibration ทบทวนผลประเมินร่วมกัน"}
+];
+const $ = id => document.getElementById(id);
+const fmt = ms => (ms/1000).toFixed(2);
+const ERR = {
+  closed:"ขณะนี้ปิดรับผลแล้ว", played:"รหัสนี้ร่วมเล่นในรอบนี้แล้ว (เล่นได้ 1 ครั้ง)",
+  bad_emp:"รหัสพนักงานไม่ถูกต้อง", no_start:"ไม่พบการเริ่มเกมของรหัสนี้ ลองเริ่มใหม่",
+  bad_key:"รหัส Admin ไม่ถูกต้อง", server_busy:"ระบบกำลังรับผลจำนวนมาก ลองอีกครั้งในไม่กี่วินาที",network:"เชื่อมต่อไม่สำเร็จ ตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง"
+};
+const errText = c => ERR[c] || ("เกิดข้อผิดพลาด (" + c + ")");
+
+if(!CONFIGURED) $("setupBanner").hidden = false;
+
+async function api(body){
+  if(!CONFIGURED) throw {error:"not_configured"};
+  let res;
+  try{
+    res = body
+      ? await fetch(API_URL, {method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"}, body:JSON.stringify(body)})
+      : await fetch(API_URL + "?action=top&t=" + Date.now());
+  }catch(e){ throw {error:"network"}; }
+  let data; try{ data = await res.json(); }catch(e){ throw {error:"network"}; }
+  if(!data.ok) throw data;
+  return data;
+}
+
+/* ---------- views & polling ---------- */
+const views = ["v-join","v-play","v-done","v-lb","v-host"];
+let current = "v-join", pollTimer = 0;
+function show(v){
+  current = v;
+  views.forEach(x => $(x).hidden = (x !== v));
+  $("app").classList.toggle("wide", v === "v-host");
+  window.scrollTo(0,0);
+  clearInterval(pollTimer);
+  if(v === "v-host"){ refresh(); pollTimer = setInterval(refresh, 3000); }
+  else if(v === "v-done" || v === "v-lb"){ refresh(); pollTimer = setInterval(refresh, 5000); }
+}
+
+/* ---------- leaderboard ---------- */
+let top = [], count = 0, isOpen = true, myId = null;
+function renderLb(table, withFlag){
+  table.textContent = "";
+  const head = table.insertRow();
+  ["#","รหัสพนักงาน","ผิด","เวลา (วิ)"].forEach((h,i)=>{ const th=document.createElement("th"); th.textContent=h; if(i===3) th.className="ms"; head.appendChild(th); });
+  if(!top.length){ const td=table.insertRow().insertCell(); td.colSpan=4; td.className="empty"; td.textContent = CONFIGURED ? "ยังไม่มีผู้เล่นส่งผล" : "ยังไม่ได้เชื่อมต่อระบบเก็บผล"; return; }
+  top.forEach((e,i)=>{
+    const tr = table.insertRow(); if(e.emp === myId) tr.className="me";
+    const r = tr.insertCell(); r.className="r";
+    if(i<3){ const m=document.createElement("span"); m.className="medal"; m.textContent=i+1; r.appendChild(m);} else r.textContent=i+1;
+    const id = tr.insertCell(); id.textContent = e.emp;
+    if(withFlag && e.check && e.check !== "OK"){ const f=document.createElement("span"); f.className="flag"; f.textContent=" · " + e.check; id.appendChild(f); }
+    tr.insertCell().textContent = e.mistakes;
+    const t = tr.insertCell(); t.className="ms"; t.textContent = fmt(e.ms);
+  });
+}
+async function refresh(){
+  try{
+    const d = await api();
+    top = Array.isArray(d.top) ? d.top : []; count = d.count || 0; isOpen = d.open !== false;
+  }catch(e){ /* keep last data */ }
+  renderLb($("lbDone"), false); renderLb($("lbOnly"), false); renderLb($("lbHost"), true);
+  $("hCount").textContent = count;
+  $("hState").textContent = isOpen ? "เปิดรับ" : "ปิดรับ";
+  $("hState").className = "state " + (isOpen ? "on" : "off");
+  $("toggleOpen").textContent = isOpen ? "ปิดรับผล" : "เปิดรับผล";
+}
+
+/* ---------- game ---------- */
+let selDate=null, selAct=null, matched=0, mistakes=0, t0=0, raf=0, playing=false, token=null;
+function shuffle(a){ const b=a.slice(); for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]];} return b; }
+function buildBoard(){
+  const dc=$("dates"), ac=$("acts"); dc.textContent=""; ac.textContent="";
+  PAIRS.forEach(p=>{ const b=document.createElement("button"); b.type="button"; b.className="tile date"; b.dataset.k=p.k; b.textContent=p.date; b.addEventListener("click",()=>pick("date",b)); dc.appendChild(b); });
+  let order; do { order = shuffle(PAIRS); } while(order.every((p,i)=>p.k===PAIRS[i].k));
+  order.forEach(p=>{ const b=document.createElement("button"); b.type="button"; b.className="tile act"; b.dataset.k=p.k; const s=document.createElement("span"); s.textContent=p.act; b.appendChild(s); b.addEventListener("click",()=>pick("act",b)); ac.appendChild(b); });
+}
+function pick(kind, el){
+  if(!playing || el.classList.contains("done")) return;
+  if(kind==="date"){ if(selDate) selDate.classList.remove("sel"); selDate=(selDate===el)?null:el; if(selDate) selDate.classList.add("sel"); }
+  else { if(selAct) selAct.classList.remove("sel"); selAct=(selAct===el)?null:el; if(selAct) selAct.classList.add("sel"); }
+  if(selDate && selAct){
+    const d=selDate, a=selAct; selDate=selAct=null; d.classList.remove("sel"); a.classList.remove("sel");
+    if(d.dataset.k===a.dataset.k){
+      d.classList.add("done"); a.classList.add("done");
+      const tag=document.createElement("span"); tag.className="tag"; tag.textContent=d.textContent; a.prepend(tag);
+      matched++; $("cnt").textContent=matched;
+      if(matched===PAIRS.length) finish();
+    } else {
+      mistakes++; t0 -= PENALTY;
+      [d,a].forEach(x=>{ x.classList.remove("wrong"); void x.offsetWidth; x.classList.add("wrong"); setTimeout(()=>x.classList.remove("wrong"),600); });
+      const pen=$("pen"); pen.classList.add("show"); setTimeout(()=>pen.classList.remove("show"),900);
+    }
+  }
+}
+function tick(){ $("timer").textContent = fmt(performance.now()-t0); if(playing) raf=requestAnimationFrame(tick); }
+function countdown(done){
+  const ov=document.createElement("div"); ov.className="overlay"; const n=document.createElement("div"); n.className="big"; ov.appendChild(n); document.body.appendChild(ov);
+  let c=3; n.textContent=c;
+  const iv=setInterval(()=>{ c--; if(c===0){ clearInterval(iv); ov.remove(); done(); } else n.textContent=c; },800);
+}
+function startGame(){
+  buildBoard(); matched=0; mistakes=0; selDate=selAct=null;
+  $("cnt").textContent="0"; $("timer").textContent="0.00";
+  show("v-play");
+  countdown(()=>{ playing=true; t0=performance.now(); raf=requestAnimationFrame(tick); });
+}
+async function finish(){
+  playing=false; cancelAnimationFrame(raf);
+  const ms = Math.round(performance.now()-t0);
+  $("rTime").textContent = fmt(ms);
+  $("rDetail").textContent = "จับคู่ผิด " + mistakes + " ครั้ง" + (mistakes ? " (รวมเวลาที่บวกเพิ่ม " + (mistakes*PENALTY/1000) + " วินาทีแล้ว)" : "");
+  $("rRank").className="pill no"; $("rRank").textContent="กำลังบันทึกผล…"; $("rMsg").className="msg"; $("rMsg").textContent="";
+  const ans=$("answers"); ans.textContent="";
+  PAIRS.forEach(p=>{ const li=document.createElement("li"); const h=document.createElement("span"); h.className="chip"; h.textContent=p.date; const s=document.createElement("span"); s.textContent=p.act; li.append(h,s); ans.appendChild(li); });
+  show("v-done");
+  if(!CONFIGURED || !token){ $("rRank").textContent="โหมดฝึกซ้อม · ไม่ได้บันทึกผล"; return; }
+  for(let attempt=0; attempt<3; attempt++){
+    try{
+      const d = await api({action:"submit", emp:myId, token:token, ms:ms, mistakes:mistakes});
+      $("rRank").textContent = "อันดับที่ " + d.rank + " จาก " + d.count + " คน" + (d.rank<=30 ? " · ติด Top 30!" : "");
+      $("rRank").className = "pill " + (d.rank<=30 ? "top" : "no");
+      refresh(); return;
+    }catch(e){
+      if(e.error !== "network" && e.error !== "server_busy"){ $("rRank").textContent = errText(e.error); return; }
+      await new Promise(r=>setTimeout(r, 1500 + Math.random()*1500));
+    }
+  }
+  $("rRank").textContent="บันทึกผลไม่สำเร็จ";
+  $("rMsg").className="msg err"; $("rMsg").textContent="แคปหน้าจอนี้ไว้ แล้วแจ้งผู้ดำเนินกิจกรรม (รหัส " + myId + " เวลา " + fmt(ms) + " วิ)";
+}
+
+/* ---------- join ---------- */
+$("joinForm").addEventListener("submit", async ev=>{
+  ev.preventDefault();
+  const msg=$("joinMsg"); msg.className="msg"; msg.textContent="";
+  const v = $("emp").value.trim().toUpperCase();
+  if(!/^[A-Z0-9-]{3,15}$/.test(v)){ msg.className="msg err"; msg.textContent="กรอกรหัสพนักงาน 3 ถึง 15 ตัว (ตัวอักษรอังกฤษหรือตัวเลข)"; return; }
+  myId = v; token = null;
+  if(!CONFIGURED){ msg.textContent="ยังไม่ได้เชื่อมต่อระบบเก็บผล จะเล่นแบบฝึกซ้อม"; setTimeout(startGame, 1000); return; }
+  $("startBtn").disabled = true; msg.textContent = "กำลังตรวจสอบรหัส…";
+  try{
+    const d = await api({action:"start", emp:v});
+    token = d.token; msg.textContent = "";
+    startGame();
+  }catch(e){ msg.className="msg err"; msg.textContent = errText(e.error); }
+  finally{ $("startBtn").disabled = false; }
+});
+$("seeLb").addEventListener("click",()=>show("v-lb"));
+$("backJoin").addEventListener("click",()=>show("v-join"));
+
+/* ---------- host / admin ---------- */
+let adminKey = "";
+function gameLink(){ return location.origin + location.pathname; }
+function drawQr(){
+  const url = gameLink(), box=$("qr");
+  $("gameUrl").textContent = url; box.textContent = "";
+  if(typeof QRCode === "undefined"){ box.textContent = "โหลด QR ไม่สำเร็จ ใช้ลิงก์ด้านล่างแทน"; return; }
+  new QRCode(box, {text:url, width:300, height:300, colorDark:"#201060", colorLight:"#FFFFFF", correctLevel:QRCode.CorrectLevel.M});
+}
+async function adminOp(op){
+  const d = await api({action:"admin", key:adminKey, op:op});
+  if(typeof d.open === "boolean") isOpen = d.open;
+  return d;
+}
+$("keyForm").addEventListener("submit", async ev=>{
+  ev.preventDefault();
+  adminKey = $("adminKey").value;
+  try{ await adminOp("check"); $("keyForm").hidden = true; $("adminCtrls").hidden = false; $("hMsg").textContent = "เข้าสู่ระบบ Admin แล้ว"; refresh(); }
+  catch(e){ $("hMsg").textContent = errText(e.error); }
+});
+$("toggleOpen").addEventListener("click", async ()=>{
+  try{ await adminOp(isOpen ? "close" : "open"); $("hMsg").textContent = ""; refresh(); }
+  catch(e){ $("hMsg").textContent = errText(e.error); }
+});
+$("newRound").addEventListener("click",()=>{ $("confirmRow").hidden=false; });
+$("noRound").addEventListener("click",()=>{ $("confirmRow").hidden=true; });
+$("yesRound").addEventListener("click", async ()=>{
+  $("confirmRow").hidden = true;
+  try{ const d = await adminOp("newround"); $("hMsg").textContent = "เริ่มรอบใหม่แล้ว (" + d.round + ")"; refresh(); }
+  catch(e){ $("hMsg").textContent = errText(e.error); }
+});
+$("exportBtn").addEventListener("click", async ()=>{
+  $("hMsg").textContent = "กำลังดึงผล…";
+  try{
+    const d = await adminOp("export");
+    const esc = v => { const s = String(v == null ? "" : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s; };
+    const csv = "﻿" + [d.header].concat(d.rows).map(r => r.map(esc).join(",")).join("\r\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8"}));
+    a.download = "timeline-race-results.csv";
+    document.body.appendChild(a); a.click(); a.remove();
+    $("hMsg").textContent = "ดาวน์โหลดแล้ว " + d.rows.length + " แถว";
+  }catch(e){ $("hMsg").textContent = errText(e.error); }
+});
+
+function route(){
+  if(location.hash === "#host"){ show("v-host"); drawQr(); }
+  else if(current === "v-host") show("v-join");
+}
+window.addEventListener("hashchange", route);
+route();
+})();
+</script>
+</body>
+</html>
